@@ -25,8 +25,6 @@ git clone https://github.com/josephhri/SSCCNN
 
 `src` folder contains the model files along with the necessary auxillary utilities file.
 
-Next you may download the pre-trained model from Google Drive: https://drive.google.com/open-file-link-here
-
 You will also have to download the HANDS2017 dataset manually from [here](https://competitions.codalab.org/competitions/17356).
 
 ### To train model from scratch
