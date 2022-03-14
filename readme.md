@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is the official implementation for the paper, "Single Shot Corrective CNN for Anatomically Correct 3D Hand Pose Estimation". Paper is present in [this] (https://www.frontiersin.org/articles/10.3389/frai.2022.759255/full) link
+This is the official implementation for the paper, "Single Shot Corrective CNN for Anatomically Correct 3D Hand Pose Estimation". Paper is present in [this](https://www.frontiersin.org/articles/10.3389/frai.2022.759255/full) link
 
 We present a novel approach that we call the Single Shot Corrective CNN (SSC-CNN) that provides a highly accurate hand pose estimation with no anatomical errors by applying corrective functions in the forward pass of the neural network using three separate networks. This ensures that the initial prediction from the network is free of anatomical errors and prevents the need for any correction using a post-processing function.
 
