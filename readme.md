@@ -53,3 +53,7 @@ Run `SSCCNNTest.py` with either the pretrained model or the newly trained model.
 ```python
 python SSCCNNTest.py
 ```
+
+### The corrected ground truths
+HANDS2017 - [here](https://drive.google.com/file/d/1RhU2TBzczKbQXOLHKBjxlSwOZdRaXjlg/view?usp=sharing)
+MSRA - [here](https://drive.google.com/file/d/1SEdp2T3_FIoS3Yjw6TBrmdulyO_K8nHM/view?usp=sharing)
