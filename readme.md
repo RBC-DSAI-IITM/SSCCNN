@@ -55,7 +55,7 @@ python SSCCNNTest.py
 ```
 
 ### The corrected ground truths
-The ground truths re corrected using the Filter rules mentioned in the paper. The corrected ground truths can be used for training purposes and can be downloaded using the links below
+The ground truths are corrected using the Filter rules mentioned in the paper. The corrected ground truths can be used for training purposes and can be downloaded using the links below
 
 HANDS2017 - [here](https://drive.google.com/file/d/1RhU2TBzczKbQXOLHKBjxlSwOZdRaXjlg/view?usp=sharing)
 
