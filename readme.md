@@ -57,6 +57,6 @@ python SSCCNNTest.py
 ### The corrected ground truths
 The ground truths are corrected using the Filter rules mentioned in the paper. The corrected ground truths can be used for training purposes and can be downloaded using the links below
 
-HANDS2017 - [original](http://icvl.ee.ic.ac.uk/hands17/challenge/) [modified ground truth](https://drive.google.com/file/d/1RhU2TBzczKbQXOLHKBjxlSwOZdRaXjlg/view?usp=sharing)
+HANDS2017 - [original](http://icvl.ee.ic.ac.uk/hands17/challenge/) / [modified ground truth](https://drive.google.com/file/d/1RhU2TBzczKbQXOLHKBjxlSwOZdRaXjlg/view?usp=sharing)
 
-MSRA - [original](https://www.dropbox.com/s/t91imizfdaf4i5l/cvpr14_MSRAHandTrackingDB.zip?dl=0) [modified ground truth](https://drive.google.com/file/d/1SEdp2T3_FIoS3Yjw6TBrmdulyO_K8nHM/view?usp=sharing)
+MSRA - [original](https://www.dropbox.com/s/t91imizfdaf4i5l/cvpr14_MSRAHandTrackingDB.zip?dl=0) / [modified ground truth](https://drive.google.com/file/d/1SEdp2T3_FIoS3Yjw6TBrmdulyO_K8nHM/view?usp=sharing)
