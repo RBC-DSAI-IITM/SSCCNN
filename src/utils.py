@@ -509,3 +509,643 @@ def pixel2world(x, fx, fy, ux, uy):
     x[:, 0] = (x[:, 0] - ux) * x[:, 2] / fx
     x[:, 1] = (x[:, 1] - uy) * x[:, 2] / fy
     return x
+
+
+def coplanar(y_values, x, y, z, alpha):
+    '''
+    Checks for coplanarity between the joints of one finger
+    '''
+    y_predRot = aligner(y_values, x, y, z)
+    indices = [0, 2]
+    val = 90 - angle_2d(y_predRot[y][indices] + tensor01,
+                        y_predRot[y][indices],
+                        y_predRot[y + 1][indices])
+    joints = [y, y + 1]
+    y_predRot[joints] = fixer(y_predRot, val, val / 2, val / 2, joints, ymain, alpha)
+
+    joints = [y + 1, y]
+    y_predRot[joints] = fixer(y_predRot, val, 0, 0, joints, ymain, alpha)
+    return y_predRot
+
+
+def fixer(y_predRot1, mainAngle, maxAngle, minAngle, joints, axis, alpha):
+    if mainAngle > maxAngle:
+        # print("Doing max")
+        angle = alpha * (mainAngle - maxAngle)
+        # print("angle fix is " + str(angle))
+        y_predRot1[joints] = rotator(y_predRot1[joints], 0, angle, axis)
+    elif mainAngle < minAngle:
+        # print("Doing min")
+        angle = alpha * (mainAngle - minAngle)
+        y_predRot1[joints] = rotator(y_predRot1[joints], 0, 360 + angle, axis)
+    return y_predRot1[joints]
+
+
+def boundcheck(y_predRot1, mainAngle, maxAngle, minAngle, joints, axis, alpha):
+    if mainAngle > maxAngle:
+        return np.abs(np.abs(mainAngle) - np.abs(maxAngle))
+    elif mainAngle < minAngle:
+        return np.abs(np.abs(mainAngle) - np.abs(minAngle))
+    else:
+        return 0.0
+
+
+def correctionModule(y_values, alpha):
+    '''
+    Corrector Module for fixing hand joints
+    '''
+    y_predRot = coplanar(y_values, 1, 6, 8, alpha)
+    y_predRot = coplanar(y_predRot, 2, 9, 11, alpha)
+    y_predRot = coplanar(y_predRot, 3, 12, 14, alpha)
+    y_predRot = coplanar(y_predRot, 4, 15, 17, alpha)
+    y_predRot = coplanar(y_predRot, 5, 18, 20, alpha)
+    realError = 0.0
+    debug = False # For debugging
+
+    # Thumb
+    y_predRot = aligner(y_predRot, 1, 2, 3)
+    indices = [0, 1]
+    valCurrent = getAngleFrom(3, 1, 6, y_predRot, indices) - getAngleFrom(3, 1, 2, y_predRot, indices)
+    thumb = [1, 6, 7, 8]
+    temp = y_predRot.copy()
+    y_predRot[thumb] = fixer(y_predRot, valCurrent, 45, -20, thumb, zmain, alpha)
+    setFirst = y_predRot[thumb]
+    val = getAngleFrom(3, 1, 6, y_predRot, indices) - getAngleFrom(3, 1, 2, y_predRot, indices)
+    checkerA = np.round(boundcheck(y_predRot, val, 45, -20, thumb, zmain, alpha))
+    y_predRot[thumb] = fixer(temp, valCurrent, 45, -20, thumb, zmain, -alpha)
+    val = getAngleFrom(3, 1, 6, y_predRot, indices) - getAngleFrom(3, 1, 2, y_predRot, indices)
+    checkerB = np.round(boundcheck(y_predRot, val, 45, -20, thumb, zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[thumb] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 2]
+    valCurrent = getAngleFrom(2, 1, 6, y_predRot, indices)
+    if y_predRot[6][2] < y_predRot[1][2]:
+        valCurrent = 360. - valCurrent
+    temp = y_predRot.copy()
+    y_predRot[thumb] = fixer(y_predRot, valCurrent, 45, 0, thumb, ymain, alpha)
+    setFirst = y_predRot[thumb]
+    val = getAngleFrom(2, 1, 6, y_predRot, indices)
+    if y_predRot[6][2] < y_predRot[1][2]:
+        val = 360. - val
+    checkerA = np.round(boundcheck(y_predRot, val, 45, 0, thumb, ymain, alpha))
+    y_predRot[thumb] = fixer(temp, valCurrent, 45, 0, thumb, ymain, -alpha)
+    val = getAngleFrom(2, 1, 6, y_predRot, indices)
+    if y_predRot[6][2] < y_predRot[1][2]:
+        val = 360. - val
+    checkerB = np.round(boundcheck(y_predRot, val, 45, 0, thumb, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[thumb] = setFirst
+    if debug:
+        print(realError)
+
+    y_predRot = aligner(y_predRot, 1, 6, 2)
+    valCurrent = 180 - getAngleFrom(1, 6, 7, y_predRot, indices)
+    if y_predRot[7][2] < y_predRot[6][2]:
+        valCurrent = valCurrent * -1
+    thumb = [6, 7, 8]
+    temp = y_predRot.copy()
+    y_predRot[thumb] = fixer(y_predRot, valCurrent, 80, 0, thumb, ymain, alpha)
+    setFirst = y_predRot[thumb]
+    val = 180 - getAngleFrom(1, 6, 7, y_predRot, indices)
+    if y_predRot[7][2] < y_predRot[6][2]:
+        val = val * -1
+    checkerA = np.round(boundcheck(y_predRot, val, 80, 0, thumb, ymain, alpha))
+    y_predRot[thumb] = fixer(temp, valCurrent, 80, 0, thumb, ymain, -alpha)
+    val = 180 - getAngleFrom(1, 6, 7, y_predRot, indices)
+    if y_predRot[7][2] < y_predRot[6][2]:
+        val = val * -1
+    checkerB = np.round(boundcheck(y_predRot, val, 80, 0, thumb, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[thumb] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 1]
+    valCurrent = 90 - getAngleFrom(7, 6, 6, y_predRot, indices, tensor01)
+    temp = y_predRot.copy()
+    y_predRot[thumb] = fixer(y_predRot, valCurrent, 7, -12, thumb, zmain, alpha)
+    setFirst = y_predRot[thumb]
+    val = 90 - getAngleFrom(7, 6, 6, y_predRot, indices, tensor01)
+    checkerA = np.round(boundcheck(y_predRot, val, 7, -12, thumb, zmain, alpha))
+    y_predRot[thumb] = fixer(temp, valCurrent, 7, -12, thumb, zmain, -alpha)
+    val = 90 - getAngleFrom(7, 6, 6, y_predRot, indices, tensor01)
+    checkerB = np.round(boundcheck(y_predRot, val, 7, -12, thumb, zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[thumb] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [1, 2]
+    valCurrent = getAngleFrom(8, 7, 7, y_predRot, indices, tensor01)
+    thumb = [7, 8]
+    temp = y_predRot.copy()
+    y_predRot[thumb] = fixer(y_predRot, valCurrent, 0, 0, thumb, -xmain, alpha)
+    setFirst = y_predRot[thumb]
+    val = getAngleFrom(8, 7, 7, y_predRot, indices, tensor01)
+    checkerA = np.round(boundcheck(y_predRot, val, 0, 0, thumb, -xmain, alpha))
+    y_predRot[thumb] = fixer(temp, valCurrent, 0, 0, thumb, -xmain, -alpha)
+    val = getAngleFrom(8, 7, 7, y_predRot, indices, tensor01)
+    checkerB = np.round(boundcheck(y_predRot, val, 0, 0, thumb, -xmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[thumb] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 2]
+    valCurrent = 180 - getAngleFrom(6, 7, 8, y_predRot, indices)
+    if y_predRot[8][2] < y_predRot[7][2]:
+        valCurrent = -1 * valCurrent
+    thumb = [7, 8]
+    temp = y_predRot.copy()
+    y_predRot[thumb] = fixer(y_predRot, valCurrent, 90, -30, thumb, ymain, alpha)
+    setFirst = y_predRot[thumb]
+    val = 180 - getAngleFrom(6, 7, 8, y_predRot, indices)
+    if y_predRot[8][2] < y_predRot[7][2]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -30, thumb, ymain, alpha))
+    y_predRot[thumb] = fixer(temp, valCurrent, 90, -30, thumb, ymain, -alpha)
+    val = 180 - getAngleFrom(6, 7, 8, y_predRot, indices)
+    if y_predRot[8][2] < y_predRot[7][2]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -30, thumb, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[thumb] = setFirst
+    if debug:
+        print(realError)
+
+    # Finger 2 - Index
+    y_predRot = aligner(y_predRot, 0, 2, 9)
+    indices = [0, 1]
+    valCurrent = 180 - getAngleFrom(0, 2, 9, y_predRot, indices)
+    if y_predRot[9][1] < y_predRot[2][1]:
+        valCurrent = -1 * valCurrent
+    index = [2, 9, 10, 11]
+    temp = y_predRot.copy()
+    y_predRot[index] = fixer(y_predRot, valCurrent, 90, -40, index, -zmain, alpha)
+    setFirst = y_predRot[index]
+    val = 180 - getAngleFrom(0, 2, 9, y_predRot, indices)
+    if y_predRot[9][1] < y_predRot[2][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -40, index, -zmain, alpha))
+    y_predRot[index] = fixer(temp, valCurrent, 90, -40, index, -zmain, -alpha)
+    val = 180 - getAngleFrom(0, 2, 9, y_predRot, indices)
+    if y_predRot[9][1] < y_predRot[2][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -40, index, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[index] = setFirst
+    if debug:
+        print(realError)
+
+    y_predRot = aligner(y_predRot, 3, 2, 9)
+    valCurrent = 90 - getAngleFrom(3, 2, 9, y_predRot, indices)
+    temp = y_predRot.copy()
+    y_predRot[index] = fixer(y_predRot, valCurrent, 15, -15, index, -zmain, alpha)
+    setFirst = y_predRot[index]
+    val = 90 - getAngleFrom(3, 2, 9, y_predRot, indices)
+    checkerA = np.round(boundcheck(y_predRot, val, 15, -15, index, -zmain, alpha))
+    y_predRot[index] = fixer(y_predRot, valCurrent, 15, -15, index, -zmain, -alpha)
+    val = 90 - getAngleFrom(3, 2, 9, y_predRot, indices)
+    checkerB = np.round(boundcheck(y_predRot, val, 15, -15, index, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[index] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 2]
+    y_predRot = aligner(y_predRot, 2, 9, 10)
+    valCurrent = 180 - getAngleFrom(2, 9, 10, y_predRot, indices)
+    if y_predRot[10][1] < y_predRot[9][1]:
+        valCurrent = -1 * valCurrent
+    index = [9, 10, 11]
+    temp = y_predRot.copy()
+    y_predRot[index] = fixer(y_predRot, valCurrent, 130, 0, index, ymain, alpha)
+    setFirst = y_predRot[index]
+    val = 180 - getAngleFrom(2, 9, 10, y_predRot, indices)
+    if y_predRot[10][1] < y_predRot[9][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 130, 0, index, ymain, alpha))
+    y_predRot[index] = fixer(temp, valCurrent, 130, 0, index, ymain, -alpha)
+    val = 180 - getAngleFrom(2, 9, 10, y_predRot, indices)
+    if y_predRot[10][1] < y_predRot[9][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 130, 0, index, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[index] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 1]
+    y_predRot = aligner(y_predRot, 9, 10, 11)
+    valCurrent = 180 - getAngleFrom(9, 10, 11, y_predRot, indices)
+    if y_predRot[11][1] > y_predRot[10][1]:
+        valCurrent = -1 * valCurrent
+    index = [10, 11]
+    temp = y_predRot.copy()
+    y_predRot[index] = fixer(y_predRot, valCurrent, 90, -30, index, -zmain, alpha)
+    setFirst = y_predRot[index]
+    val = 180 - getAngleFrom(9, 10, 11, y_predRot, indices)
+    if y_predRot[11][1] > y_predRot[10][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -30, index, -zmain, alpha))
+    y_predRot[index] = fixer(temp, valCurrent, 90, -30, index, -zmain, -alpha)
+    val = 180 - getAngleFrom(9, 10, 11, y_predRot, indices)
+    if y_predRot[11][1] > y_predRot[10][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -30, index, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[index] = setFirst
+    if debug:
+        print(realError)
+
+    # Finger 3 - Middle
+    y_predRot = aligner(y_predRot, 0, 3, 12)
+    valCurrent = 180 - getAngleFrom(0, 3, 12, y_predRot, indices)
+    if y_predRot[12][1] < y_predRot[3][1]:
+        valCurrent = -1 * valCurrent
+    middle = [3, 12, 13, 14]
+    temp = y_predRot.copy()
+    y_predRot[middle] = fixer(y_predRot, valCurrent, 90, -40, middle, -zmain, alpha)
+    setFirst = y_predRot[middle]
+    val = 180 - getAngleFrom(0, 3, 12, y_predRot, indices)
+    if y_predRot[12][1] < y_predRot[3][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -40, middle, -zmain, alpha))
+    y_predRot[middle] = fixer(temp, valCurrent, 90, -40, middle, -zmain, -alpha)
+    val = 180 - getAngleFrom(0, 3, 12, y_predRot, indices)
+    if y_predRot[12][1] < y_predRot[3][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -40, middle, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[middle] = setFirst
+    if debug:
+        print(realError)
+
+    y_predRot = aligner(y_predRot, 4, 3, 12)
+    valCurrent = 90 - getAngleFrom(4, 3, 12, y_predRot, indices)
+    temp = y_predRot.copy()
+    y_predRot[middle] = fixer(y_predRot, valCurrent, 15, -15, middle, -zmain, alpha)
+    setFirst = y_predRot[middle]
+    val = 90 - getAngleFrom(4, 3, 12, y_predRot, indices)
+    checkerA = np.round(boundcheck(y_predRot, val, 15, -15, middle, -zmain, alpha))
+    y_predRot[middle] = fixer(temp, valCurrent, 15, -15, middle, -zmain, -alpha)
+    val = 90 - getAngleFrom(4, 3, 12, y_predRot, indices)
+    checkerB = np.round(boundcheck(y_predRot, val, 15, -15, middle, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[middle] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 2]
+    y_predRot = aligner(y_predRot, 3, 12, 13)
+    valCurrent = 180 - getAngleFrom(3, 12, 13, y_predRot, indices)
+    if y_predRot[13][1] < y_predRot[12][1]:
+        valCurrent = -1 * valCurrent
+    middle = [12, 13, 14]
+    temp = y_predRot.copy()
+    y_predRot[middle] = fixer(y_predRot, valCurrent, 130, 0, middle, ymain, alpha)
+    setFirst = y_predRot[middle]
+    val = 180 - getAngleFrom(3, 12, 13, y_predRot, indices)
+    if y_predRot[13][1] < y_predRot[12][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 130, 0, middle, ymain, alpha))
+    y_predRot[middle] = fixer(temp, valCurrent, 130, 0, middle, ymain, -alpha)
+    val = 180 - getAngleFrom(3, 12, 13, y_predRot, indices)
+    if y_predRot[13][1] < y_predRot[12][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 130, 0, middle, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[middle] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 1]
+    y_predRot = aligner(y_predRot, 12, 13, 14)
+    valCurrent = 180 - getAngleFrom(12, 13, 14, y_predRot, indices)
+    if y_predRot[14][1] < y_predRot[13][1]:
+        valCurrent = -1 * valCurrent
+    middle = [13, 14]
+    temp = y_predRot.copy()
+    y_predRot[middle] = fixer(y_predRot, valCurrent, 90, -30, middle, ymain, alpha)
+    setFirst = y_predRot[middle]
+    val = 180 - getAngleFrom(12, 13, 14, y_predRot, indices)
+    if y_predRot[14][1] < y_predRot[13][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -30, middle, ymain, alpha))
+    y_predRot[middle] = fixer(temp, valCurrent, 90, -30, middle, ymain, -alpha)
+    val = 180 - getAngleFrom(12, 13, 14, y_predRot, indices)
+    if y_predRot[14][1] < y_predRot[13][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -30, middle, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[middle] = setFirst
+    if debug:
+        print(realError)
+
+    # Finger 4 - Ring
+    y_predRot = aligner(y_predRot, 0, 4, 15)
+    valCurrent = 180 - getAngleFrom(0, 4, 15, y_predRot, indices)
+    if y_predRot[15][1] < y_predRot[4][1]:
+        valCurrent = -1 * valCurrent
+    ring = [4, 15, 16, 17]
+    temp = y_predRot.copy()
+    y_predRot[ring] = fixer(y_predRot, valCurrent, 90, -40, ring, -zmain, alpha)
+    setFirst = y_predRot[ring]
+    val = 180 - getAngleFrom(0, 4, 15, y_predRot, indices)
+    if y_predRot[15][1] < y_predRot[4][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -40, ring, -zmain, alpha))
+    y_predRot[ring] = fixer(temp, valCurrent, 90, -40, ring, -zmain, -alpha)
+    val = 180 - getAngleFrom(0, 4, 15, y_predRot, indices)
+    if y_predRot[15][1] < y_predRot[4][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -40, ring, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[ring] = setFirst
+    if debug:
+        print(realError)
+
+    y_predRot = aligner(y_predRot, 5, 4, 15)
+    val1 = 90 - getAngleFrom(5, 4, 15, y_predRot, indices)
+    temp = y_predRot.copy()
+    y_predRot[ring] = fixer(y_predRot, val1, 15, -15, ring, -zmain, alpha)
+    setFirst = y_predRot[ring]
+    val = 90 - getAngleFrom(5, 4, 15, y_predRot, indices)
+    checkerA = np.round(boundcheck(y_predRot, val, 15, -15, ring, -zmain, alpha))
+    y_predRot[ring] = fixer(temp, val1, 15, -15, ring, -zmain, -alpha)
+    val = 90 - getAngleFrom(5, 4, 15, y_predRot, indices)
+    checkerB = np.round(boundcheck(y_predRot, val, 15, -15, ring, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[ring] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 2]
+    y_predRot = aligner(y_predRot, 4, 15, 16)
+    val1 = 180 - getAngleFrom(4, 15, 16, y_predRot, indices)
+    if y_predRot[16][1] < y_predRot[15][1]:
+        val1 = -1 * val1
+    ring = [15, 16, 17]
+    temp = y_predRot.copy()
+    y_predRot[ring] = fixer(y_predRot, val1, 130, 0, ring, ymain, alpha)
+    setFirst = y_predRot[ring]
+    val = 180 - getAngleFrom(4, 15, 16, y_predRot, indices)
+    if y_predRot[16][1] < y_predRot[15][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 130, 0, ring, ymain, alpha))
+    y_predRot[ring] = fixer(temp, val1, 130, 0, ring, ymain, -alpha)
+    val = 180 - getAngleFrom(4, 15, 16, y_predRot, indices)
+    if y_predRot[16][1] < y_predRot[15][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 130, 0, ring, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[ring] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 1]
+    y_predRot = aligner(y_predRot, 15, 16, 17)
+    val1 = 180 - getAngleFrom(15, 16, 17, y_predRot, indices)
+    if y_predRot[17][1] > y_predRot[16][1]:  # greater
+        val1 = -1 * val1
+    ring = [16, 17]
+    temp = y_predRot.copy()
+    y_predRot[ring] = fixer(y_predRot, val1, 90, -30, ring, zmain, alpha)
+    setFirst = y_predRot[ring]
+    val = 180 - getAngleFrom(15, 16, 17, y_predRot, indices)
+    if y_predRot[17][1] > y_predRot[16][1]:  # greater
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -30, ring, zmain, alpha))
+    y_predRot[ring] = fixer(temp, val1, 90, -30, ring, zmain, -alpha)
+    val = 180 - getAngleFrom(15, 16, 17, y_predRot, indices)
+    if y_predRot[17][1] > y_predRot[16][1]:  # greater
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -30, ring, zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[ring] = setFirst
+    if debug:
+        print(realError)
+
+    # Finger 5 Pinky
+    y_predRot = aligner(y_predRot, 0, 5, 18)
+    val1 = 180 - getAngleFrom(0, 5, 18, y_predRot, indices)
+    if y_predRot[18][1] < y_predRot[5][1]:
+        val1 = -1 * val1
+    pinky = [5, 18, 19, 20]
+    temp = y_predRot.copy()
+    y_predRot[pinky] = fixer(y_predRot, val1, 90, -40, pinky, -zmain, alpha)
+    setFirst = y_predRot[pinky]
+    val = 180 - getAngleFrom(0, 5, 18, y_predRot, indices)
+    if y_predRot[18][1] < y_predRot[5][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -40, pinky, -zmain, alpha))
+    y_predRot[pinky] = fixer(temp, val1, 90, -40, pinky, -zmain, -alpha)
+    val = 180 - getAngleFrom(0, 5, 18, y_predRot, indices)
+    if y_predRot[18][1] < y_predRot[5][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -40, pinky, -zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[pinky] = setFirst
+    if debug:
+        print(realError)
+
+    y_predRot = aligner(y_predRot, 4, 5, 18)
+    val1 = getAngleFrom(4, 5, 18, y_predRot, indices) - 90
+    temp = y_predRot.copy()
+    y_predRot[pinky] = fixer(y_predRot, val1, 15, -15, pinky, zmain, alpha)
+    setFirst = y_predRot[pinky]
+    val = getAngleFrom(4, 5, 18, y_predRot, indices) - 90
+    checkerA = np.round(boundcheck(y_predRot, val, 15, -15, pinky, zmain, alpha))
+    y_predRot[pinky] = fixer(temp, val1, 15, -15, pinky, zmain, -alpha)
+    val = getAngleFrom(4, 5, 18, y_predRot, indices) - 90
+    checkerB = np.round(boundcheck(y_predRot, val, 15, -15, pinky, zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[pinky] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 1]
+    y_predRot = aligner(y_predRot, 5, 18, 19)
+    val1 = 180 - getAngleFrom(5, 18, 19, y_predRot, indices)
+    if y_predRot[19][1] < y_predRot[18][1]:
+        val1 = -1 * val1
+    pinky = [18, 19, 20]
+    temp = y_predRot.copy()
+    y_predRot[pinky] = fixer(y_predRot, val1, 130, 0, pinky, ymain, alpha)
+    setFirst = y_predRot[pinky]
+    val = 180 - getAngleFrom(5, 18, 19, y_predRot, indices)
+    if y_predRot[19][1] < y_predRot[18][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 130, 0, pinky, ymain, alpha))
+    y_predRot[pinky] = fixer(temp, val1, 130, 0, pinky, ymain, -alpha)
+    val = 180 - getAngleFrom(5, 18, 19, y_predRot, indices)
+    if y_predRot[19][1] < y_predRot[18][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 130, 0, pinky, ymain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[pinky] = setFirst
+    if debug:
+        print(realError)
+
+    indices = [0, 1]
+    y_predRot = aligner(y_predRot, 18, 19, 20)
+    val1 = 180 - getAngleFrom(18, 19, 20, y_predRot, indices)
+    if y_predRot[20][1] > y_predRot[19][1]:
+        val1 = -1 * val1
+    pinky = [19, 20]
+    temp = y_predRot.copy()
+    y_predRot[pinky] = fixer(y_predRot, val1, 90, -30, pinky, zmain, alpha)
+    setFirst = y_predRot[pinky]
+    val = 180 - getAngleFrom(18, 19, 20, y_predRot, indices)
+    if y_predRot[20][1] > y_predRot[19][1]:
+        val = -1 * val
+    checkerA = np.round(boundcheck(y_predRot, val, 90, -30, pinky, zmain, alpha))
+    y_predRot[pinky] = fixer(temp, val1, 90, -30, pinky, zmain, -alpha)
+    val = 180 - getAngleFrom(18, 19, 20, y_predRot, indices)
+    if y_predRot[20][1] > y_predRot[19][1]:
+        val = -1 * val
+    checkerB = np.round(boundcheck(y_predRot, val, 90, -30, pinky, zmain, alpha))
+    if checkerA > checkerB:
+        realError += checkerB
+    else:
+        realError += checkerA
+        y_predRot[pinky] = setFirst
+    if debug:
+        print(realError)
+
+    # Match former alignment
+    translate = y_values[0] - y_predRot[0]
+    y_predRot = y_predRot + translate
+
+    v1 = y_predRot[3] - y_predRot[0]
+    v2 = y_values[3] - y_predRot[0]
+    rad = angle_between(v1, v2)
+    d = np.degrees(rad)
+    axisPoint = np.cross(v1, v2)
+
+    test = PointRotate3D(y_predRot[0],
+                         y_predRot[0] + unit_vector(axisPoint),
+                         y_predRot[3],
+                         np.radians(d))
+    values = np.zeros((21, 3))
+
+    if np.linalg.norm(np.round(y_values[3] - test)) == 0:
+        for j in range(0, 21):
+            values[j, :] = PointRotate3D(y_predRot[0],
+                                         y_predRot[0] + unit_vector(axisPoint),
+                                         y_predRot[j],
+                                         np.radians(d))
+    else:
+        for j in range(0, 21):
+            deg = 360 - d
+            values[j, :] = PointRotate3D(y_predRot[0],
+                                         y_predRot[0] + unit_vector(axisPoint),
+                                         y_predRot[j],
+                                         np.radians(deg))
+
+    y_predRot = values
+
+    # Final Rotation
+    def getProjpoint(point, orig, normal):
+        v = point - orig
+        dist = np.dot(v, normal)
+        projected_point = point - dist * normal
+        return projected_point
+
+    norm = unit_vector(y_predRot[3] - y_predRot[0])
+    a = getProjpoint(y_predRot[4], y_predRot[0], norm)
+    b = getProjpoint(y_values[4], y_predRot[0], norm)
+    v1 = a - y_predRot[0]
+    v2 = b - y_predRot[0]
+    rad1 = angle_between(v1, v2)
+    d = np.degrees(rad1)
+
+    test = PointRotate3D(y_predRot[0],
+                         y_predRot[3],
+                         y_predRot[4],
+                         np.radians(d))
+
+    values = np.zeros((21, 3))
+    c1 = np.linalg.norm(np.round(y_values[4] - test))
+
+    if c1 == 0:
+        for j in range(0, 21):
+            values[j, :] = PointRotate3D(y_predRot[0],
+                                         y_predRot[3],
+                                         y_predRot[j],
+                                         np.radians(d))
+    else:
+        for j in range(0, 21):
+            deg1 = 360 - d
+            values[j, :] = PointRotate3D(y_predRot[0],
+                                         y_predRot[3],
+                                         y_predRot[j],
+                                         np.radians(deg1))
+    y_predRot = values
+    return y_predRot, realError
